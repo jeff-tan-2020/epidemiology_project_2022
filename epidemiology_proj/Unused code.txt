@@ -1,0 +1,327 @@
+sir <- function (datum, tmin, tmax, beta, gamma = 1/10){
+  I0 = sum(datum$New.Cases[(tmin-9):(tmin)])
+  R0 = datum$Total.Cases[(tmin-10)] - Total.Deaths[(tmin-10)]
+  S0 = N - I0 - R0 
+  cumulative_cases = vector()
+  cumulative_cases[1] = datum$Total.Cases[tmin]
+  t_len = tmax - tmin
+  for (t in 1:t_len) {
+    dI = beta*I[t]*S[t]/N - gamma*I[t]
+    cumulative_cases[t+1] = cumulative_cases[t] + beta*I[t]*S[t]/N
+    I[t+1]= I[t] + dI
+    R[t+1]= R[t] + gamma*I[t] 
+    S[t+1]= S[t] - beta*I[t]*S[t]/N
+  }
+  return(cumulative_cases)
+}
+  
+
+
+
+
+## Model 3: The Discrete endemic SEIR Model
+The endemic SEIR model built off of the SEIR model by adding in natural rates
+of birth and death into the model. The birth and death rates ($\mu$) were assumed 
+to be equal such that the total population (N) remains constant. $\mu$ was also
+assumed to be equal to the reciprocal of the life-expectancy in North Carolina
+($\mu = \frac {1}{78.1}$) [9]. 
+
+The discrete transitions in the SEIR model were thus defined as:
+$$E(t+1)=  \beta I(t) \frac{S(t)}{N} + (1 - \epsilon - \mu) E(t)$$
+$$I(t+1)= \epsilon E(t) + (1 - \gamma - \mu) I(t)$$
+$$P(t+1)= (1- \mu)P(t) + \gamma I(t)$$
+$$R(t+1)= P(t+1) + (1-\frac {P(t)}{N} - \mu)\times V(t)$$
+$$S(t+1) = N - E(t+1) - I(t+1) - R(t+1) $$
+
+
+seir_model_bd <- function (datum, tmin, tmax, beta, psi1, psi2, psi3, nu){
+  epsilon = 1/5
+  gamma = 1/10
+  mu = 1/78.1
+  #determine I0, R0, and E0 at time tmin-1 that carries over into day tmin
+  I0 = sum(New.Cases[(tmin-9):(tmin)])
+  P0 = nu * (Total.Cases[(tmin-10)] - Total.Deaths[(tmin-10)])
+  E0 = sum(New.Cases[(tmin+1):(tmin+5)])
+  #Vaccines assumed to be effective in 2 weeks
+  V0 = psi1*(datum$People.Receiving.1.or.More.Doses.Cumulative[(tmin-14)] -
+              datum$People.Fully.Vaccinated.Cumulative[(tmin-14)]) +
+    psi2*(datum$People.Fully.Vaccinated.Cumulative[(tmin-14)] -
+           datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-14)]) + 
+    psi3 * datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-14)]
+  
+  R0 = P0 + V0 *(1 - P0/N)
+  S0 = N - I0 - R0 
+  
+  t_len = tmax - tmin
+  
+  S = vector()
+  E = vector()
+  R = vector()
+  I = vector()
+  P = vector()
+  
+  dose1 = datum$People.Receiving.1.or.More.Doses.Cumulative[(tmin - 13):(tmax - 13)]
+  dose2 = datum$People.Fully.Vaccinated.Cumulative[(tmin - 13):(tmax -13)]
+  dose3 = datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin - 13):(tmax -13)]
+  V = psi1* (dose1 - dose2) + psi2* (dose2 - dose3) + psi3 * dose3
+  
+  S[1] = S0
+  E[1] = E0
+  I[1] = I0
+  R[1] = R0
+  
+  P[1] = P0
+  
+  #returned vector
+  cumulative_cases = vector()
+  cumulative_cases[1] = datum$Total.Cases[tmin]
+  
+  for (t in 1:t_len) {
+    dI = epsilon*E[t] - gamma*I[t]
+    cumulative_cases[t+1] = cumulative_cases[t] + epsilon * E[t]
+    dP = gamma*I[t] 
+    dE = -epsilon*E[t] + beta*I[t]*S[t]/N
+    prop = P[t]/N
+    E[t+1] = E[t] + dE - mu*E[t]
+    I[t+1]= I[t] + dI - mu*I[t]
+    P[t+1] = P[t] + dP - mu*P[t]
+    R[t+1]= P[t+1] + V[t] *(1-prop - mu)
+    S[t+1]= N - I[t+1] - R[t+1] - E[t+1]
+  }
+  return(cumulative_cases)
+}
+
+seir_omicron_bd <- function (datum, tmin, tmax, beta, psi1, psi2, psi3, nu){
+  epsilon = 1/5
+  gamma = 1/10
+  mu = 1/78.1
+  #determine I0, R0, and E0 at time tmin-1 that carries over into day tmin
+  I0 = sum(New.Cases[(tmin-9):(tmin)])
+  P0 = nu * (Total.Cases[(tmin-10)] - Total.Deaths[(tmin-10)])
+  E0 = sum(New.Cases[(tmin+1):(tmin+5)])
+  #Vaccines assumed to be effective in 2 weeks
+  V0 = psi1*(datum$People.Fully.Vaccinated.Cumulative[(tmin-28)] - 
+               datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-14)]) +
+    psi2*(datum$People.Fully.Vaccinated.Cumulative[(tmin-14)] -
+            datum$People.Fully.Vaccinated.Cumulative[(tmin-28)]) + 
+    psi3 * datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-14)]
+  
+  R0 = P0 + V0 *(1 - P0/N)
+  S0 = N - I0 - R0 
+  
+  t_len = tmax - tmin
+  
+  S = vector()
+  E = vector()
+  R = vector()
+  I = vector()
+  P = vector()
+  
+  dose2_old = datum$People.Fully.Vaccinated.Cumulative[(tmin - 27):(tmax - 27)]- 
+    datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-13):(tmax - 13)]
+  dose2_new = datum$People.Fully.Vaccinated.Cumulative[(tmin - 13):(tmax -13)] - 
+    datum$People.Fully.Vaccinated.Cumulative[(tmin-27):(tmax-27)]
+  dose3 = datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin - 13):(tmax -13)]
+  
+  V = psi1* dose2_old + psi2* dose2_new + psi3 * dose3
+  
+  S[1] = S0
+  E[1] = E0
+  I[1] = I0
+  R[1] = R0
+  
+  P[1] = P0
+  
+  #returned vector
+  cumulative_cases = vector()
+  cumulative_cases[1] = datum$Total.Cases[tmin]
+  
+  for (t in 1:t_len) {
+    dI = epsilon*E[t] - gamma*I[t]
+    cumulative_cases[t+1] = cumulative_cases[t] + epsilon * E[t]
+    dP = gamma*I[t] 
+    dE = -epsilon*E[t] + beta*I[t]*S[t]/N
+    prop = P[t]/N
+    E[t+1] = E[t] + dE - mu*E[t]
+    I[t+1]= I[t] + dI - mu*I[t]
+    P[t+1] = P[t] + dP - mu*P[t]
+    R[t+1]= P[t+1] + V[t] *(1-prop - mu)
+    S[t+1]= N - I[t+1] - R[t+1] - E[t+1]
+  }
+  return(cumulative_cases)
+}
+
+
+
+```{r seirbd_model-fitting}
+par(mfrow=c(3,2))
+
+#----------First wave model fitting -----------------------------------------
+beta_first = seq(0.153, 0.157, 0.001)
+
+first_MSE = vector()
+
+for (i in 1:length(beta_first)){
+  predicted = seir_model_bd(data, start1, peak1, beta_first[i], 0.7, 0.935, 1, 0.99)
+  first_MSE[i] = MSE(predicted, first_true_cases)
+}
+
+plot(beta_first, first_MSE, xlab = "Beta Estimates", ylab = "MSE",
+     main=title("A) First", adj = 0))
+
+model_first = seir_model_bd(data, start1, peak1, 0.155, 0.7, 0.935, 1, 0.99)
+first_models[3] = MSE(model_first, first_true_cases)
+
+sample_data <- data.frame(time = c(first_wave), predicted = model_first, total = Total.Cases[first_wave])
+                            
+  
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+      main = expression(paste(beta, " = 0.155; Re = 1.29")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+#----------- seirbd_delta_model-fitting-----------------------------------------
+
+
+beta_delta = seq(0.363, 0.367, 0.001)
+
+delta_MSE = vector()
+
+for (i in 1:length(beta_delta)){
+  predicted = seir_model_bd(data, start2, peak2, beta_delta[i], .307, .796, .94, 0.92)
+  delta_MSE[i] = MSE(predicted, delta_true_cases)
+}
+
+plot(beta_delta, delta_MSE, xlab = "Beta Estimates", ylab = "MSE",
+     main=title("B) Delta", adj = 0))
+
+model_delta = seir_model_bd(data, start2, peak2, 0.365, .307, .796, .94, 0.92)
+delta_models[3] = MSE(model_delta, delta_true_cases)
+
+sample_data <- data.frame(time = c(delta_wave), predicted = model_delta, 
+                          total = Total.Cases[delta_wave])
+                            
+  
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+      main = expression(paste(beta, " = 0.365; Re = 3.04")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+#-------- seirbd_omicron_model-fitting -----------------------------------------
+
+beta_omi= seq(0.358, 0.362, 0.001)
+
+omi_MSE = vector()
+
+for (i in 1:length(beta_omi)){
+  predicted = seir_omicron_bd(data, start3, peak3, beta_omi[i], 0.119, 0.703, .705, 0.56)
+  omi_MSE[i] = MSE(predicted, omi_true_cases)
+}
+plot(beta_omi, omi_MSE, xlab = "Beta Estimates", ylab = "MSE",
+     main=title("C) Omicron", adj = 0)) 
+
+model_omi = seir_omicron_bd(data, start3, peak3, 0.360,  0.119, 0.703, .705, 0.56)
+omicron_models[3] = MSE(model_omi, omi_true_cases)
+
+sample_data <- data.frame(time = c(omicron_wave), predicted = model_omi, total = Total.Cases[omicron_wave])
+                            
+  
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+      main = expression(paste(beta, " = 0.360; Re = 3.00")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+```
+
+
+
+
+
+
+
+
+
+seir_omicron_bd <- function (datum, tmin, tmax, beta, mu1, mu2, mu3, nu){
+  epsilon = 1/3
+  gamma = 1/10
+  birthing_women = sum(c(338155, 338141,363173,347155, 339183, 329949))
+  natural_death = 782.3/100000
+  natural_birth = (57.8/1000) * birthing_women 
+  virus_death = (datum$Total.Deaths[(tmax+8)] - datum$Total.Deaths[(tmin+8)]) / 
+  (datum$Total.Cases[tmax] - datum$Total.Cases[tmin])
+  
+  I0 = sum(datum$New.Cases[(tmin-9):(tmin)])
+  P0 = nu * (datum$Total.Cases[(tmin-10)] - datum$Total.Deaths[(tmin-10)])
+  E0 = sum(datum$New.Cases[(tmin+1):(tmin+3)])
+  
+  V0 = (mu1*(datum$People.Fully.Vaccinated.Cumulative[(tmin-28)] - 
+              datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-14)]) +
+    mu2*(datum$People.Fully.Vaccinated.Cumulative[(tmin-14)] -
+           datum$People.Fully.Vaccinated.Cumulative[(tmin-28)]) + 
+    mu3 * datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-14)])
+  
+  R0 = P0 + V0*(1 - P0/N)
+  S0 = N - I0 - R0 - E0
+  
+  t_len = tmax - tmin
+  
+  S = vector()
+  E = vector()
+  R = vector()
+  I = vector()
+  P = vector()
+  
+  dose2_old = datum$People.Fully.Vaccinated.Cumulative[(tmin - 27):(tmax - 27)]- 
+    datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin-13):(tmax - 13)]
+  dose2_new = datum$People.Fully.Vaccinated.Cumulative[(tmin - 13):(tmax -13)] - 
+    datum$People.Fully.Vaccinated.Cumulative[(tmin-27):(tmax-27)]
+  dose3 = datum$People.Receiving.a.Booster.Dose.Cumulative[(tmin - 13):(tmax -13)]
+  
+  V = (mu1* dose2_old + mu2* dose2_new + mu3 * dose3)
+  
+  S[1] = S0
+  E[1] = E0
+  R[1] = R0
+  I[1] = I0
+  P[1] = P0
+  
+  #returned vector
+  cumulative_cases = vector()
+  cumulative_cases[1] = datum$Total.Cases[tmin]
+  
+  for (t in 1:t_len) {
+    n = S[t] + E[t] + I[t] + R[t]
+    cumulative_cases[t+1] = cumulative_cases[t] + epsilon * E[t]
+    prop = P[t]/n
+    E[t+1] = E[t] + beta*I[t]*S[t]/n - (epsilon + natural_death)*E[t]
+    I[t+1]= I[t] + epsilon*E[t] - (virus_death + gamma + natural_death) *I[t]
+    P[t+1] = P[t] + gamma*I[t]
+    R[t+1]= P[t] + gamma*I[t] + V[t] *(1-prop)
+    S[t+1]= n + natural_birth - n*natural_death - virus_death*I[t] - I[t] - R[t] - E[t]
+  }
+  return(cumulative_cases)
+}
+
+#total number infecteds
+infected = vector()
+
+for(t in 1:120) {
+  infected[t+1] = infected[t] + dFirst$New.Cases[t] - dFirst10$New.Cases[t]
+}
+
+
+std = sd(datum$New.Cases[(t-6):t])
+    t_value = (datum$X7.day.Moving.Avg[(t+7)] - datum$X7.day.Moving.Avg[t])/(std/ sqrt(7))
+    t_c = qt(p= .01, df= 6, lower.tail= FALSE)
+    if(t_value >= t_c){
+      return(t)
+    }
+
+
+

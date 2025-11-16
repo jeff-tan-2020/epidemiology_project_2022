@@ -1,0 +1,648 @@
+---
+title: "Discrete-time SIR and SEIR models with vaccination to estimate the transmissibility of Covid-19 variants in North Carolina"
+author: "Jeffery Tan"
+date: "April 16, 2022"
+editor_options: 
+  chunk_output_type: console
+output:
+  pdf_document: default
+---
+
+```{r load-package, include=FALSE}
+graphics.off()
+# clear old objects from memory
+rm(list=ls(all=TRUE))
+
+library(plyr)
+library(tidyverse)
+library(MLmetrics)
+#library(EpiDynamics)
+source("covid_model.R")
+source("stats.R")
+```
+
+```{r set_up, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      comment = "#>", highlight = TRUE,
+                      fig.align = "center")
+```
+
+# Abstract
+
+I designed and implemented two discrete-time epidemiological models to model the transmission of Alpha, Delta, and Omicron variants of SARS-CoV-2 in North Carolina.  These models were inspired by the SIR and SEIR models but incorporated both vaccination and natural immunity. The model implementation incorporates cumulative COVID-19 vaccination data as well as reported data on vaccine efficacy. The model was fitted with cumulative daily COVID-19 case data in North Carolina retrieved from the Centers of Disease Control and Prevention. The simulation results suggested that despite preventive measures such as masking, social distancing, and vaccination to mitigate the spread of COVID-19, the estimated effective reproduction numbers predicted spread for each virus. The SIR model predicted $R_e$ values of 1.26 for Alpha, 2.65 for Delta, and 2.33 for Omicron. The SEIR model predicted slightly higher values of 1.36 for Alpha, 3.35 for Delta, and 3.34 for Omicron. 
+
+# Introduction
+
+Severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2) is a highly transmissible and pathogenic coronavirus that emerged from Wuhan, China in December 2019 [18]. SARS-CoV-2 has rapidly spread around the world, causing many different outbreaks of ‘coronavirus disease 2019’ (COVID-19) and was soon characterized as a pandemic by the World Health Organization in March 2020 [19].  Since then, various viral mutations have resulted in the evolution of many variants of concern (VOC) such as Alpha (B.1.1.7), Beta (B.1.351), Delta (B.1.617.2), and Omicron (B.1.1.529) which have differing levels of infectivity and severity [6]. In order to combat the spread of Covid-19, vaccines such as the BioNTech/Pfizer BNT162b2 mRNA-based vaccine and the AstraZeneca viral vector vaccine were rapidly developed and were made available to be delivered to patients in the United States as of December 2020 [8,20]. Because of the evolution of new VOC and the varying effectiveness of vaccinations for each variant, it is essential for us to understand the potential disease spread, mortality, and recovery for previous and new viral variants which cause COVID-19. 
+
+Understanding the transmissibility of infectious agents is essential to predicting 
+the size of an outbreak and estimate the level of herd immunity needed
+to eliminate the infection from the population [14]. The transmissibility of the virus 
+can be modeled by the basic reproduction number ($R_0$), an estimate of the number of secondary 
+infections generated from an initial case at the beginning of an epidemic with an
+entirely susceptible population [13]. An outbreak is expected to continue if $R_0 > 1$ 
+and to end if $R_0 < 1$. In the case that some of the population 
+has gained immunity from prior infection or vaccination, it is more appropriate 
+to estimate the effective reproduction number ($R_e$). $R_e$ is similar to $R_0$ but does not assume complete susceptibility of the population [13, 14]. As $R_e$ captures the number 
+of secondary infections from a population with some levels of immunity, it is 
+strictly less than $R_0$ [13]. Factors affecting $R_e$ include the size of the
+infectious population, the size of the susceptible population, and behaviors such as social distancing [17]. The impact of prevent measures such as vaccination could 
+potentially end an epidemic, if $R_e$ can be reduced to a value less than 1 [13].
+
+## SIR Model
+The SIR model is the most commonly used compartmental epidemiological model which divides
+the population into three different classes: individuals susceptible (*S*) to infection,
+individuals currently infectious (*I*), and individuals who have recovered and
+are no longer susceptible to reinfection (*R*) [1,15]. Transitions between classes
+can only occur via infection of susceptible individuals (*S*) to become infected 
+(*I*) and recovery of infectious individuals to become removed from
+the infected class (*R*). Assuming there is no
+net change in population size, then at any time the sum of all individuals in 
+the population will equal the total population size N.
+$$N = S + I + R$$
+The changes in the size of each compartment in the model can be expressed as a 
+system of differential equations in a continuous-time model [1, 15].
+$$\frac {d S}{d t}=-\beta I(t) \frac{S(t)}{N}$$
+$$\frac {d I}{d t}=\beta I(t) \frac{S(t)}{N} - \gamma I(t)$$
+$$\frac {d R}{d t}= \gamma I(t)$$
+
+- The rate of change of *S* is a negative value as the number of susceptible 
+individuals continuously decreases through infection. The magnitude of the change
+represents the likelihood an infected individual comes 
+into contact with a susceptible individual and transmits the infection. $\beta$ 
+is a disease specific transmission coefficient that represents both the 
+likelihood of individuals making contact and the transmission probability [1].
+- The rate of change of *I* is separated into a positive parameter as the rate
+of infection and a negative parameter representing the rate of
+recovery from infection. $\gamma$ is the recovery rate of the disease which
+can be estimated as the reciprocal of infection duration [1]. 
+- The rate of change of *R*  is a positive value as the number of removed 
+individuals increases with recovery from infection. 
+In the SIR model, $R_0$ can be calculated as 
+$$R_0 = \frac {\beta} {\gamma}$$.
+
+## SEIR Model
+Another commonly used epidemiological model is the SEIR model which adds an 
+exposed class (*E*) to the SIR model between susceptible and infected individuals
+that represents the population exposed to infection but are not yet infectious [10, 15]. 
+$$\frac {d S}{d t}=-\beta I(t) \frac{S(t)}{N}$$
+$$\frac {d E}{d t}=\beta I(t) \frac{S(t)}{N} - \epsilon E(t)$$
+$$\frac {d I}{d t}=\epsilon E(t) - \gamma I(t)$$
+$$\frac {d R}{d t}= \gamma I(t)$$
+
+- The rate of change of *E* is separated into an increase of *E* through 
+susceptibles being exposed to virus and decrease through individuals leaving 
+the incubation period and becoming infectious. $\epsilon$ can thus be estimated
+as the reciprocal of the incubation period [15]. 
+- The rate of change of *I* thus changes as the increasing number of infectious
+indviduals is a result of them leaving the incubation period and becoming infectious. 
+
+In the SEIR model, $R_0$ can be calculated in a similar manner to the SIR model 
+$$R_0 = \frac {\beta \epsilon} {\gamma \epsilon} = \frac {\beta} {\gamma}$$.
+
+In this project, I modified the SIR and SEIR models to develop two discrete-time 
+compartmental models to explore the data on COVID-19 infection and vaccination 
+in North Carolina retrieved from the Centers of Disease Control (CDC) [8]. In 
+these models, I used data on total vaccinations and estimated vaccine efficacy 
+(VE) to incorporate the effect vaccine immunization has on the effective transmission
+of COVID-19. The models were used to predict the cumulative number of cases the outbreaks of
+three different variants of SARS-CoV-2: the Alpha variant, the Delta variant,
+and the Omicron variant. By comparing the model predictions with the actual data 
+on Covid-19 infection, I hope to estimate $R_e$ for each of the selected variants 
+of interest through variation in $\beta$. 
+
+# Methods
+
+```{r load-data, include=FALSE}
+N = 10500000
+
+d1 = read.csv("data/data_table_for_daily_case_trends__north_carolina.csv", header = TRUE, skip = 2)
+d2 = read.csv("data/data_table_for_daily_death_trends__north_carolina.csv", header = TRUE, skip = 2)
+d3= read.csv("data/data_table_for_total_cases__north_carolina.csv", header = TRUE, skip = 2)
+d4= read.csv("data/data_table_for_total_deaths__north_carolina.csv", header = TRUE, skip = 2)
+dv= read.csv("data/trends_in_number_of_covid19_vaccinations_in_nc.csv", header = TRUE, skip = 2)
+
+df1 = join(d1, d2, by = c("Day","Date", "State"))
+df2 = join(d3, d4, by = c("Day","Date", "State"))
+df3 = join(df1, df2, by = c("Day","Date", "State"))
+df4 = join(df3, dv, by = "Day")
+
+
+data = df4 %>% select(c("Day", "Date", "New.Cases","Total.Cases", "Total.Deaths",
+                        "X7.day.Moving.Avg",
+                        "People.Receiving.1.or.More.Doses.Cumulative",
+                        "People.Fully.Vaccinated.Cumulative", 
+                      "People.Receiving.a.Booster.Dose.Cumulative"))
+
+rm("d1", "d2", "d3", "d4", "dv", "df1", "df2", "df3", "df4")
+
+data <- data %>% 
+  arrange(Day) %>% 
+  mutate_if(is.numeric, ~replace(., is.na(.), 0))
+  
+attach(data)
+```
+
+## 1. Data Selection
+
+My analysis will focus on the 3 major peaks in the plot of new cases over 
+time, which correspond to the outbreaks of different variants of Covid-19.
+Each model will be created from the start of the wave up to the peak of the wave
+as was done by Diagne et al [16]. 
+
+The start of each wave was found by determining the day in which the number of 
+new cases in the following five days was significantly greater than the 
+number of new cases in the previous five days by using a one-sided t-test with
+$p < 0.02$. The peaks for each of the waves were defined as the day with the 
+greatest number of new cases according to the data (Fig 1). 
+
+1. The first selected wave from day 254 to 307 corresponded with the outbreak of the Alpha 
+  variant (Nov 10 2020 to Jan 2 2021) 
+2. The second selected wave from day 486 to 551 corresponded with the outbreak of the Delta 
+  variant (Jun 30 2021 to Sep 3 2021) 
+3. The third selected wave from day 660 to 684 corresponds with the outbreak of the 
+  Omicron variant (Dec 21 2021 to Jan 14 2022) [6]
+
+```{r start_determination, include = FALSE}
+start1 = find_start(data, 170, 270); start1
+start2 = find_start(data, 470, 500); start2
+start3 = find_start(data, 650, 670); start3
+
+```
+
+```{r peak_determination, include = FALSE}
+peak1 = which.max(New.Cases[240:370]) + 240 - 1; peak1
+peak2 = which.max(New.Cases[485:610]) + 485 - 1; peak2
+peak3 = which.max(New.Cases[660:715]) + 660 - 1; peak3
+```
+
+```{r plot_set_up, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE,
+                      comment = "#>", highlight = TRUE,
+                      fig.align = "center", fig.height = 6.6, fig.width = 8)
+```
+
+```{r plot}
+par(mfrow=c(2,2))
+plot(Day, New.Cases,xlab="Time (d)",ylab="New Cases", 
+     main=title("A)", adj = 0)) 
+plot(Day, New.Cases ,xlab="Time",ylab="New Cases", xlim = c(230, 370), 
+     ylim = c(0, 12000), main=title("B)", adj = 0))
+abline(v = c((start1-1), (peak1-1)), col = "red", lty=2, lwd=c(1, 1))
+
+plot(Day, New.Cases ,xlab="Time",ylab="New Cases", xlim = c(470, 610), 
+     ylim = c(0, 10000), main=title("C)", adj = 0))
+abline(v = c((start2-1), (peak2-1)), col = "red", lty=2, lwd=c(1, 1))
+
+plot(Day, New.Cases ,xlab="Time",ylab="New Cases", xlim = c(650, 715),
+     ylim = c(0, 40000), main=title("D)", adj = 0))     
+abline(v = c((start3-1), (peak3-1)), col = "red", lty=2, lwd=c(1, 1))
+
+```
+
+**Figure 1 | New cases of Covid-19 per day in North Carolina:**
+**(A)** The number of new cases each day since March 1, 2020 to March 4, 2022; 
+**(B)** The peak corresponding to the outbreak of the Alpha variant (simulation from day 254 to 308); 
+**(C)** The peak corresponding to the outbreak of the Delta variant (simulation from day 486 to 552);
+**(D)** The peak corresponding to the outbreak of the Omicron variant (simulation from day 660 to 685) 
+
+## 2. Data Analysis and Model Comparison 
+The outputs for each of the models will be a vector of predictions for the cumulative
+number of COVID-19 cases during that time. This vector will be initialized as 
+the total number of cases at time $t_0$ and increase by the positive change
+in I(t): $\beta I(t) \frac{S(t)}{N}$ for the SIR model and $\epsilon E(t)$
+for the SEIR models. The mean-squared error between the prediction and the
+observed cases was taken to find the value of $\beta$ which best fits the prediction model
+with the data. I used the best-fit $\beta$ to estimate the $R_e$ of each variant
+through $R_e = \frac { \beta} { \gamma}$.
+
+## 3. Model Building
+
+```{r model_comparison_setup, include = FALSE}
+alpha_models = vector()
+delta_models = vector()
+omicron_models = vector()
+```
+
+The SIR, SEIR, and endemic SEIR models were implemented with a few common 
+assumptions and model parameters. 
+
+1. The duration of infection is estimated to last 10 days ($\gamma = \frac{1}{10}$) [2]. 
+- The starting infectious population will be the sum of all new cases from 9 days
+  prior and including the starting day
+$$I_{initial} = \sum_{n= t_0 - 9}^{t_0}New.Cases$$
+2. To account for vaccinated individuals, the vaccine is assumed to grant 
+immunity 14 days after injection. Data was obtained from the CDC on the number 
+of individuals in NC who have received 1-dose, 2-doses (full course), and 
+3-doses (booster course) of vaccination [8]. Vaccine efficacy data for each
+variant was obtained to calculate the vaccinated population who show 
+immunity to the variant. Vaccinated individuals who do not show immunity to 
+infection were assumed to be in the susceptible population. 
+$$V(t) = \psi_1 V_1[(t-14)] + \psi_2 V_2[(t-14)] + \psi_3 V_3[(t-14)]$$
+3. The removed population R will be calculated from both those
+  previously infected (P) and those with immunity from vaccination (V). 
+- P will be initialized as the number of individuals that had Covid-19 ten days 
+  prior and had not died from infection. $\nu$ is used in the calculation to
+  represent the effectiveness that previous infection has of preventing reinfection
+$$P_{initial} = \nu \times[Total.Cases (t_0 - 10) - Total.Deaths(t_0 - 10)]$$
+- The rate of change of P will be analgous to that of R from the traditional SIR or SEIR model 
+- To avoid double counting of those who are both vaccinated and previously infected, I will 
+  assume the percentage of people previously infected in the vaccinated population 
+  is equal to the percentage of people previously infected in the general population.
+  Thus, the estimate for *R* at a given time in the model can be expressed as
+  the following. 
+$$R(t) = P(t) + V(t)\times(1 - \frac {P(t)}{N})$$
+4. No change in population size: I assume that there are an equal number of 
+  births and deaths in the population such that the total population (N) remains 
+  constant at 10.5 million [12]. Thus, the sum of all individuals in each compartment
+  will be equal to N.
+  $$S(t) + R(t) + I(t) = N$$ 
+  $$S(t) + E(t) + R(t) + I(t) = N$$ 
+
+### A) Modelling the Alpha Wave of Covid-19: Day 254 through 307
+Data on the vaccine efficacy of the mRNA-based vaccines to prevent infections
+from the earlier variants of Covid-19, including the Alpha variant, showed a single dose had 
+VE of 70% and two-doses showed VE of 93.5% [3]. Booster doses
+were not rolled out at this time, so $\psi_3$ was arbitrarily set to 1. Previous 
+infection of Covid-19 was shown to be 90.2% effective at preventing symptomatic 
+reinfection by the Alpha variant [7].
+($\psi_1 = .70$ ; $\psi_2 = .935$ ; $\psi_3 = 1$; $\nu = .902$) 
+
+### B) Modelling the Delta Wave of Covid-19: Day 486 through 551
+VE data for the Delta variant of Covid-19 showed that a single dose was 30.7% effective
+at preventing infection and two-doses of any vaccine were 79.6% effective at
+preventing infection [4]. Data on the effectiveness of a third booster shot 
+showed an absolute vaccine effectiveness range from 94% to 97% and the mean value
+was used in my analysis [5]. Previous 
+infection of Covid-19 was shown to be 92.0% effective at preventing symptomatic 
+reinfection by the Delta variant [7].
+($\psi_1 = .307$ ; $\psi_2 = .796$ ; $\psi_3 = .955$; $\nu = .92$)
+
+### C) Modelling the Omicron Wave of Covid-19: Day 660 through 684
+Data from Andrews et al. showed the vaccine effectiveness of the mRNA-based 
+vaccines to prevent infections of the Omicron variant was time-dependent. [5] 
+Those who received a full course of the BNT162b2 vaccine 2-4 weeks prior 
+showed a VE of 65.5%, which dropped to 15.5% after 15-19 weeks, and then down to
+8.8% after 25 weeks. The VE of a two-doses of the mRNA-1273 vaccine 
+showed a similar reduction from 75.1% after 2-4 weeks to 14.9% 
+after 25 or more weeks. Those who received a BNT162b2 booster dose showed increased
+VE to 67.2% while those who received a mRNA-1273 booster showed an increased VE of 73.9%.
+Previous infection of Covid-19 was shown to be 56.0% effective at preventing symptomatic 
+reinfection by the Omicron variant [7].
+
+In order to model these time dependent effects, I modified the calculation for 
+the number of individuals effectively immunized by dividing the vaccinated 
+population into three classes: a population receiving 2-doses of the vaccine 4 or more weeks 
+prior, a population receiving 2-doses of the vaccine 2 to 4 weeks prior, and 
+the a population receiving a booster dose of the vaccine 2 or more weeks prior.
+$$V(t) = \psi_1 V_2[(t-28)] + \psi_2 V_2[(t-28):(t-14)] + \psi_3 V_3[(t-14)]$$
+The VE for each class was determined by the average of the BNT162b2 and mRNA-1273
+vaccines. For the population receiving 2-doses of the vaccine more than 4 weeks 
+prior, the VE for each vaccine was estimated to be that at 25 or more weeks prior.
+($\psi_1 = .119$ ; $\psi_2 = .703$ ; $\psi_3 = .706$; $\nu = .56$)
+
+## Model 1: The Discrete SIR Model
+The discrete transitions in the SIR model were thus defined as:
+$$I(t+1)= I(t) + \beta I(t) \frac{S(t)}{N} - \gamma I(t)$$
+$$P(t+1)=P(t) + \gamma I(t)$$
+$$R(t+1)= P(t+1) + (1-\frac {P(t)}{N})\times V(t+1)$$
+$$S(t+1) = N - I(t+1) - R(t+1) $$
+
+## Model 2: The Discrete SEIR Model
+Previously modeled median incubation times of COVID-19 was predicted 
+to be 5.1 days [11], so $\epsilon = \frac {1}{5}$. The starting number of exposed 
+individuals will be the sum of all new cases from one day to five days after the starting day.
+$$E_{initial} = \sum_{n= t_0 + 1}^{t_0 + 5}New.Cases$$
+
+The discrete transitions in the SEIR model were thus defined as:
+$$E(t+1)= E(t) + \beta I(t) \frac{S(t)}{N} - \epsilon E(t)$$
+$$I(t+1)= I(t) + \epsilon E(t) - \gamma I(t)$$
+$$P(t+1)=P(t) + \gamma I(t)$$
+$$R(t+1)= P(t+1) + (1-\frac {P(t)}{N})\times V(t+1)$$
+$$S(t+1) = N - E(t+1) - I(t+1) - R(t+1) $$
+
+```{r model_set_up, include=FALSE}
+knitr::opts_chunk$set(fig.height = 6.6, fig.width = 5.1)
+```
+
+# Results
+
+## SIR Model Simulations
+
+The simulations from the discrete-time SIR model predicted the best-fit values
+for $\beta$ as 0.126 for the Alpha variant, 0.265 for the Delta variant, and
+0.233 for the Omicron variant. Thus, the predicted effective reproduction numbers
+were $R_e = 1.26$ for Alpha, $R_e = 2.65$ for Delta, and $R_e = 2.33$ for Omicron. 
+
+```{r sir_model-fitting}
+par(mfrow=c(3,2))
+
+#-----------------Alpha wave model fitting-----------------------------
+alpha_wave = c(start1:peak1)
+alpha_true_cases = Total.Cases[alpha_wave]
+
+beta_alpha = seq(0.124, 0.128, 0.001)
+alpha_MSE = vector()
+
+for (i in 1:length(beta_alpha)){
+  predicted = sir_model(data, start1, peak1, beta_alpha[i], 1/10, 0.7, 0.935, 1, 0.902)
+  alpha_MSE[i] = MSE(predicted, alpha_true_cases)
+}
+
+plot(beta_alpha, alpha_MSE, xlab = "Beta Estimates", ylab = "MSE", main=title("A) Alpha", adj = 0))
+
+model_alpha = sir_model(data, start1, peak1, 0.126, 1/10, 0.7, 0.935, 1, 0.902)
+alpha_models[1] = MSE(model_alpha, alpha_true_cases)
+
+sample_data <- data.frame(time = c(alpha_wave), 
+                          predicted = model_alpha, 
+                          total = Total.Cases[alpha_wave])
+                            
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+     main = expression(paste(beta, " = 0.126; Re = 1.26")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+#----------------------delta_model-fitting---------------------------------
+
+delta_wave = c(start2:peak2)
+
+beta_delta = seq(0.263, 0.267, 0.001)
+delta_true_cases = Total.Cases[delta_wave]
+
+delta_MSE = vector()
+
+for (i in 1:length(beta_delta)){
+  predicted = sir_model(data, start2, peak2, beta_delta[i], 1/10, .307, .796, .955, 0.92)
+  delta_MSE[i] = MSE(predicted, delta_true_cases)
+}
+
+plot(beta_delta, delta_MSE, xlab = "Beta Estimates", ylab = "MSE",  main=title("B) Delta", adj = 0))
+
+model_delta = sir_model(data, start2, peak2, 0.265, 1/10, .307, 0.796, .955, 0.92)
+delta_models[1] = MSE(model_delta, delta_true_cases)
+
+sample_data <- data.frame(time = c(delta_wave), 
+                          predicted = model_delta, 
+                          total = Total.Cases[delta_wave])
+                          
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",
+     ylab="Total Number of Cases",
+     main = expression(paste(beta, " = 0.265; Re = 2.65")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+#------------------------r omicron_model-fitting-------------------------------
+
+omicron_wave = c(start3: peak3)
+
+beta_omi= seq(0.231, 0.235, 0.001)
+omi_true_cases = Total.Cases[omicron_wave]
+
+omi_MSE = vector()
+
+for (i in 1:length(beta_omi)){
+  predicted = sir_omicron(data, start3, peak3, beta_omi[i], 1/10, 0.119, 0.703, .706, 0.56)
+  omi_MSE[i] = MSE(predicted, omi_true_cases)
+}
+plot(beta_omi, omi_MSE, xlab = "Beta Estimates", ylab = "MSE",  main=title("C) Omicron", adj = 0)) 
+
+model_omi = sir_omicron(data, start3, peak3, 0.233, 1/10, 0.119, 0.703, .706, 0.56)
+omicron_models[1] = MSE(model_omi, omi_true_cases)
+
+sample_data <- data.frame(time = c(omicron_wave), predicted = model_omi, total = Total.Cases[omicron_wave])
+                            
+  
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+      main = expression(paste(beta, " = 0.233; R = 2.33")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+```
+
+**Figure 2 | SIR Model Fitting and Results:** The left shows the predicted
+best fit $\beta$ values for the SIR model obtained by minimizing the mean-squared error 
+between the model predictions and the observed data. The right plots the model 
+predictions (blue) and observed data (red) for the cumulative number of cases during a wave;
+**(A)** Alpha variant; **(B)** Delta variant; **(C)** Omicron variant
+
+## SEIR Model Simulations
+
+The simulations from the discrete-time SEIR model predicted slightly higher best-fit 
+values for $\beta$ than the SIR model being 0.136 for the Alpha variant, 
+0.335 for the Delta variant, and 0.334 for the Omicron variant. 
+Thus, the predicted effective reproduction numbers
+were $R_e = 1.36$ for Alpha, $R_e = 3.35$ for Delta, and $R_e = 3.34$ for Omicron. 
+
+```{r seir_model-fitting}
+par(mfrow=c(3,2))
+
+#----------------alpha wave model fitting----------------------------
+beta_alpha = seq(0.134, 0.139, 0.001)
+
+alpha_MSE = vector()
+
+for (i in 1:length(beta_alpha)){
+  predicted = seir_model(data, start1, peak1, beta_alpha[i], 0.7, 0.935, 1, 0.902)
+  alpha_MSE[i] = MSE(predicted, alpha_true_cases)
+}
+
+plot(beta_alpha, alpha_MSE, xlab = "Beta Estimates", ylab = "MSE", main=title("A) Alpha", adj = 0))
+
+model_alpha = seir_model(data, start1, peak1, 0.136, 0.7, 0.935, 1, 0.902)
+alpha_models[2] = MSE(model_alpha, alpha_true_cases)
+
+sample_data <- data.frame(time = alpha_wave, predicted = model_alpha, total = Total.Cases[alpha_wave])
+                            
+  
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+     main = expression(paste(beta, " = 0.136; Re = 1.36")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+#---------------------seir_delta_model-fitting-----------------------------
+
+beta_delta = seq(0.332, 0.337, 0.001)
+
+delta_MSE = vector()
+
+for (i in 1:length(beta_delta)){
+  predicted = seir_model(data, start2, peak2, beta_delta[i], .307, .796, .955, 0.92)
+  delta_MSE[i] = MSE(predicted, delta_true_cases)
+}
+
+plot(beta_delta, delta_MSE, xlab = "Beta Estimates", ylab = "MSE", main=title("B) Delta", adj = 0))
+
+model_delta = seir_model(data, start2, peak2, 0.335, .307, .796, .955, 0.92)
+delta_models[2] = MSE(model_delta, delta_true_cases)
+
+sample_data <- data.frame(time = c(delta_wave), 
+                          predicted = model_delta, 
+                          total = Total.Cases[delta_wave])
+                            
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+     main = expression(paste(beta, " = 0.335; Re = 3.35")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted, col= alpha('blue', 0.7), lwd=2)
+
+#-------------------seir_omicron_model-fitting---------------------------------
+
+beta_omi= seq(0.331, 0.336, 0.001)
+
+omi_MSE = vector()
+
+for (i in 1:length(beta_omi)){
+  predicted = seir_omicron(data, start3, peak3, beta_omi[i], 0.119, 0.703, .706, 0.56)
+  omi_MSE[i] = MSE(predicted, omi_true_cases)
+}
+plot(beta_omi, omi_MSE, xlab = "Beta Estimates", ylab = "MSE", main=title("C) Omicron", adj = 0)) 
+
+
+model_omi = seir_omicron(data, start3, peak3, 0.334,  0.119, 0.703, .706, 0.56)
+omicron_models[2] = MSE(model_omi, omi_true_cases)
+
+sample_data <- data.frame(time = c(omicron_wave), predicted = model_omi, total = Total.Cases[omicron_wave])
+                            
+  
+# create base scatter plot
+plot(sample_data$time, sample_data$total, col = 'red', pch = 20, xlab="Time",ylab="Total Number of Cases",
+     main = expression(paste(beta, " = 0.334; Re = 3.34")))
+  
+# overlay line plot 
+lines(sample_data$time, sample_data$predicted,col= alpha('blue', 0.7), lwd=2)
+
+```
+
+**Figure 3 | SEIR Model Fitting and Results:** The left shows the predicted
+best fit $\beta$ values for the SEIR model obtained by minimizing the mean-squared error 
+between the model predictions and the observed data. The right plots the model 
+predictions (blue) and observed data (red) for the cumulative number of cases during a wave;
+**(A)** Alpha variant; **(B)** Delta variant; **(C)** Omicron variant
+
+```{r comparison_set_up, include=FALSE}
+knitr::opts_chunk$set(fig.height = 5, fig.width = 6)
+```
+
+## SIR and SEIR Model Comparison
+
+Comparison of the mean-squared error values at the best fit $\beta$ 
+between the two models showed mixed results for each variant. The SEIR model
+showed more accurate performance for the Alpha variant, worse performance for the
+Delta variant, and roughly equal but slightly better performance for the Omicron
+variant when compared to the SIR model. 
+
+```{r model_comparison}
+par(mfrow=c(2,2), mai = c(0.5, 1, 0.5, 0.5))
+
+barplot(alpha_models, main= title("A) Alpha", adj = 0), names.arg=c("SIR", "SEIR"), 
+        ylab = "Mean-squared error")
+
+barplot(delta_models, main=title("B) Delta", adj = 0), names.arg=c("SIR", "SEIR"), 
+        ylab = "Mean-squared error")
+barplot(omicron_models,  main=title("C) Omicron", adj = 0), names.arg=c("SIR", "SEIR"), 
+        ylab = "Mean-squared error")
+```
+
+
+**Figure 4 | Comparison of SIR and SEIR Models:** The model fitting between the 
+SIR and SEIR models were compared by the of their best fit $\beta$ values; 
+**(A)** Alpha variant; **(B)** Delta variant; **(C)** Omicron variant
+
+# Discussion 
+
+The SIR and SEIR models I implemented predicted similar but somewhat depressed
+effective reproduction numbers for the Alpha, Delta, and Omicron variants as reported
+in the literature. Diagne et al. implemented an ordinary differential equation 
+model built based on an SEIR model which incorporated vaccination and treatment.
+Their model was fit to the cumulative daily COVID-19 cases in Senegal
+near the time when Alpha was the dominant variant (29 March–29 April 2021) and 
+predicted a basic reproduction number of $R_0 = 1.31$ [16]. Arroyo-Marioli et al. estimated
+similar effective reproduction numbers at the beginning of the epidemic in Brazil at
+2.13 (95% CI: 0.81–3.04), 1.78 (95% CI: 0.92–2.41) in India, and 2.86 (95% CI:
+1.91–3.81) in Germany. A review by Liu and Rocklöv indicated that epidemiological
+estimates of $R_0$ for Delta ranged from 3.2 to 8 [21]. The same group reviewed
+estimates for the reproductive number of Omicron and found an average $R_0$ of 9.5
+with a range from 5.5 to 24 and an average $R_e$ of 3.4 with a range from 0.88 to 9.4
+[22]. 
+
+However, the results from my discrete-time SIR and SEIR models with vaccination possesses
+some limitations when applied to the broader population. The analysis may not be 
+representative of the global spread of a certain SARS-CoV-2 variant because the 
+data was taken only from the population of North Carolina and any inherent flaws 
+in the data, such as unreported COVID-19 cases, could alter the predictions for 
+the effective reproduction number. This model makes certain population level 
+assumptions regarding constant population size, vaccine effectiveness, immunity 
+from previous infection, and average recovery and incubation time that are 
+likely variable in the real population.In addition, this model assumes the 
+dominant SARS-CoV-2 variant at the time is responsible for all infections during that period. 
+
+Furthermore, the estimated $R_e$ for each variant were all most likely 
+underestimates of the true basic reproduction number $R_0$. Both models
+incorporated a previously immunized population from vaccination or previous 
+infection and did not account for any preventative measures taken by the population such
+as mask-wearing and social-distancing. However, it was still an unexpected result 
+that the models predicted a lesser $R_e$ for Omicron compared to Delta when the 
+literature suggests otherwise. This may be due to the Omicron variant showing 
+greater capabilities of immune evasion from vaccination and natural infection which were implemented 
+into the model. The initial number of susceptible individuals 
+when simulating the Omicron variant were greater than that when simulating 
+Delta. Thus, the $\beta$ value for Omicron might have decreased compared to delta
+as contact with a susceptible individual was more likely. This could be changed 
+by implementing a time-dependent function to represent waning immunity from 
+vaccination and prior infection over time, as was done in the models for Omicron 
+but not in the models for Delta and Alpha. Further changes that could improve the 
+accuracy of these models would be to build a continuous time model using 
+ordinary differential equations and adding more compartments, such as separating
+the infected class into mild and severe infections with varying levels of 
+transmission ($\beta$) and recovery ($\gamma$). 
+
+## Acknowledgements
+Thank you to Dr. William F. Morris for teaching Biology 668: Population Ecology
+and guiding me in the research process. 
+
+# References
+
+1. Roberts, M., & Heesterbeek, H. (1993). Bluff your way in epidemic models. Trends in microbiology, 1(9), 343–348. https://doi.org/10.1016/0966-842x(93)90075-3
+2. Byrne, A. W., McEvoy, D., Collins, A. B., Hunt, K., Casey, M., Barber, A., Butler, F., Griffin, J., Lane, E. A., McAloon, C., Brien, K., Wall, P., Walsh, K. A., & More, S. J. (2020). Inferred duration of infectious period of SARS-CoV-2: rapid scoping review and analysis of available evidence for asymptomatic and symptomatic COVID-19 cases. BMJ Open, 10(8), e039856. https://doi.org/10.1136/bmjopen-2020-039856 
+3. Carazo, S., Talbot, D., Boulianne, N., Brisson, M., Gilca, R., Deceuninck, G., Brousseau, N., Drolet, M., Ouakki, M., Sauvageau, C., Barkati, S., Fortin, É., Carignan, A., De Wals, P., Skowronski, D. M., & De Serres, G. (2021). Single-Dose Messenger RNA Vaccine Effectiveness Against Severe Acute Respiratory Syndrome Coronavirus 2 in Healthcare Workers Extending 16 Weeks Postvaccination: A Test-Negative Design From Québec, Canada. Clinical Infectious Diseases, ciab739. https://doi.org/10.1093/cid/ciab739 
+4. Lopez Bernal, J., Andrews, N., Gower, C., Gallagher, E., Simmons, R., Thelwall, S., Stowe, J., Tessier, E., Groves, N., Dabrera, G., Myers, R., Campbell, C. N. J., Amirthalingam, G., Edmunds, M., Zambon, M., Brown, K. E., Hopkins, S., Chand, M., & Ramsay, M. (2021). Effectiveness of Covid-19 Vaccines against the B.1.617.2 (Delta) Variant. New England Journal of Medicine, 385(7), 585-594. https://doi.org/10.1056/NEJMoa2108891 
+5.Andrews, N., Stowe, J., Kirsebom, F., Toffa, S., Sachdeva, R., Gower, C., Ramsay, M., & Lopez Bernal, J. (2022). Effectiveness of COVID-19 booster vaccines against COVID-19-related symptoms, hospitalization and death in England. Nature Medicine. https://doi.org/10.1038/s41591-022-01699-1 
+6.  Katella, K. (2022, March 30). Omicron, Delta, Alpha, and more: What to know about the coronavirus variants. Yale Medicine. Retrieved April 9, 2022, from https://www.yalemedicine.org/news/covid-19-variants-of-concern-omicron
+7. Altarawneh, H. N., Chemaitelly, H., Hasan, M. R., Ayoub, H. H., Qassim, S., AlMukdad, S., Coyle, P., Yassine, H. M., Al-Khatib, H. A., Benslimane, F. M., Al-Kanaani, Z., Al-Kuwari, E., Jeremijenko, A., Kaleeckal, A. H., Latif, A. N., Shaik, R. M., Abdul-Rahim, H. F., Nasrallah, G. K., Al-Kuwari, M. G., Butt, A. A., … Abu-Raddad, L. J. (2022). Protection against the Omicron Variant from Previous SARS-CoV-2 Infection. The New England journal of medicine, NEJMc2200133. Advance online publication. https://doi.org/10.1056/NEJMc2200133
+8. Centers for Disease Control and Prevention. (2022). CDC Covid Data tracker. Centers for Disease Control and Prevention. Retrieved March 5, 2022, from https://covid.cdc.gov/covid-data-tracker/
+9. N.C. State Center for Health Statistics. (2022, March 7). Life expectancy. NC SCHS: Statistics and Reports: Life Expectancy. Retrieved April 3, 2022, from https://schs.dph.ncdhhs.gov/data/lifexpectancy/
+10. Carcione, J. M., Santos, J. E., Bagaini, C., & Ba, J. (2020). A Simulation of a COVID-19 Epidemic Based on a Deterministic SEIR Model [Original Research]. Frontiers in Public Health, 8. https://doi.org/10.3389/fpubh.2020.00230 
+11. McAloon, C., Collins, Á., Hunt, K., Barber, A., Byrne, A. W., Butler, F., Casey, M., Griffin, J., Lane, E., McEvoy, D., Wall, P., Green, M., Grady, L., & More, S. J. (2020). Incubation period of COVID-19: a rapid systematic review and meta-analysis of observational research. BMJ Open, 10(8), e039652. https://doi.org/10.1136/bmjopen-2020-039652 
+12. United States Census Bureau. (2021, July 1). U.S. Census Bureau quickfacts: North Carolina. QuickFacts North Carolina. Retrieved April 4, 2022, from https://www.census.gov/quickfacts/NC 
+13. Anderson, R., Donnelly, C., Hollingsworth, D., Keeling, M., Vegvari, C., Baggaley, R., & Maddren , R. (2020, August 24). Reproduction number (R) and growth rate (r) of the COVID-19 epidemic in the UK. Retrieved April 4, 2022, from https://royalsociety.org/-/media/policy/projects/set-c/set-covid-19-R-estimates.pdf?la=en-GB&amp;hash=FDFFC11968E5D247D8FF641930680BD6 
+14. Delamater, P. L., Street, E. J., Leslie, T. F., Yang, Y., & Jacobsen, K. H. (2019). Complexity of the Basic Reproduction Number (R0). Emerging Infectious Diseases, 25(1), 1-4. https://doi.org/10.3201/eid2501.171901.
+15. Abou-Ismail A. (2020). Compartmental Models of the COVID-19 Pandemic for Physicians and Physician-Scientists. SN comprehensive clinical medicine, 2(7), 852–858. https://doi.org/10.1007/s42399-020-00330-z
+16. Diagne, M. L., Rwezaura, H., Tchoumi, S. Y., & Tchuenche, J. M. (2021). A Mathematical Model of COVID-19 with Vaccination and Treatment. Computational and Mathematical Methods in Medicine, 2021, 1250129. https://doi.org/10.1155/2021/1250129 
+17. Achaiah, N. C., Subbarajasetty, S. B., & Shetty, R. M. (2020). R0 and Re of COVID-19: Can We Predict When the Pandemic Outbreak will be Contained?. Indian journal of critical care medicine : peer-reviewed, official publication of Indian Society of Critical Care Medicine, 24(11), 1125–1127. https://doi.org/10.5005/jp-journals-10071-23649
+18. Hu, B., Guo, H., Zhou, P., & Shi, Z.-L. (2021). Characteristics of SARS-CoV-2 and COVID-19. Nature Reviews Microbiology, 19(3), 141-154. https://doi.org/10.1038/s41579-020-00459-7 
+19. Liu, Y.-C., Kuo, R.-L., & Shih, S.-R. (2020). COVID-19: The first documented coronavirus pandemic in history. Biomedical Journal, 43(4), 328-333. https://doi.org/https://doi.org/10.1016/j.bj.2020.04.007 
+20. Vitiello, A., Ferrara, F., Troiano, V., & La Porta, R. (2021). COVID-19 vaccines and decreased transmission of SARS-CoV-2. Inflammopharmacology, 29(5), 1357–1360. https://doi.org/10.1007/s10787-021-00847-2
+21. Liu, Y., & Rocklöv, J. (2021). The reproductive number of the Delta variant of SARS-CoV-2 is far higher compared to the ancestral SARS-CoV-2 virus. Journal of Travel Medicine, 28(7), taab124. https://doi.org/10.1093/jtm/taab124 
+22. Liu, Y., & Rocklöv, J. (2022). The effective reproduction number for the omicron SARS-CoV-2 variant of concern is several times higher than Delta. Journal of travel medicine, taac037. Advance online publication. https://doi.org/10.1093/jtm/taac037
+
+
+
+
+
+
+
+
+
+
+
+

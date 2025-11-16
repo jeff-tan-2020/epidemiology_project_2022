@@ -1,0 +1,36 @@
+Provider: Silverchair
+Database: Oxford University Press
+Content: text/plain; charset="UTF-8"
+
+TY  - JOUR
+AU  - Carazo, Sara
+AU  - Talbot, Denis
+AU  - Boulianne, Nicole
+AU  - Brisson, Marc
+AU  - Gilca, Rodica
+AU  - Deceuninck, Geneviève
+AU  - Brousseau, Nicholas
+AU  - Drolet, Mélanie
+AU  - Ouakki, Manale
+AU  - Sauvageau, Chantal
+AU  - Barkati, Sapha
+AU  - Fortin, Élise
+AU  - Carignan, Alex
+AU  - De Wals, Philippe
+AU  - Skowronski, Danuta M
+AU  - De Serres, Gaston
+T1  - Single-Dose Messenger RNA Vaccine Effectiveness Against Severe Acute Respiratory Syndrome Coronavirus 2 in Healthcare Workers Extending 16 Weeks Postvaccination: A Test-Negative Design From Québec, Canada
+PY  - 2021
+Y1  - 2021/08/30
+DO  - 10.1093/cid/ciab739
+JO  - Clinical Infectious Diseases
+JA  - Clin Infect Dis
+SP  - ciab739
+SN  - 1058-4838
+AB  - In Canada, first and second doses of messenger RNA (mRNA) vaccines against severe acute respiratory syndrome coronavirus 2 (SARS-CoV-2) were uniquely spaced 16 weeks apart. We estimated 1- and 2-dose mRNA vaccine effectiveness (VE) among healthcare workers (HCWs) in Québec, Canada, including protection against varying outcome severity, variants of concern (VOCs), and the stability of single-dose protection up to 16 weeks postvaccination.A test-negative design compared vaccination among SARS-CoV-2 test–positive and weekly matched (10:1), randomly sampled, test-negative HCWs using linked surveillance and immunization databases. Vaccine status was defined by 1 dose ≥14 days or 2 doses ≥7 days before illness onset or specimen collection. Adjusted VE was estimated by conditional logistic regression.Primary analysis included 5316 cases and 53 160 controls. Single-dose VE was 70% (95% confidence interval [CI], 68%–73%) against SARS-CoV-2 infection; 73% (95% CI, 71%–75%) against illness; and 97% (95% CI, 92%–99%) against hospitalization. Two-dose VE was 86% (95% CI, 81%–90%) and 93% (95% CI, 89%–95%), respectively, with no hospitalizations. VE was higher for non-VOCs than VOCs (73% Alpha) among single-dose recipients but not 2-dose recipients. Across 16 weeks, no decline in single-dose VE was observed, with appropriate stratification based upon prioritized vaccination determined by higher vs lower likelihood of direct patient contact.One mRNA vaccine dose provided substantial and sustained protection to HCWs extending at least 4 months postvaccination. In circumstances of vaccine shortage, delaying the second dose may be a pertinent public health strategy.
+Y2  - 3/21/2022
+UR  - https://doi.org/10.1093/cid/ciab739
+ER  - 
+
+
+
