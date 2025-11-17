@@ -1,4 +1,4 @@
-_Discrete-time SIR and SEIR models with vaccination to estimate the transmissibility of Covid-19 variants in North Carolina_
+**Discrete-time SIR and SEIR models with vaccination to estimate the transmissibility of Covid-19 variants in North Carolina**
 
 Jeffery Tan
 
